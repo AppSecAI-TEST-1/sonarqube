@@ -202,7 +202,7 @@ public class RuleIndexer implements StartupIndexer, ResilientIndexer {
     return new IndexRequest(INDEX_TYPE_RULE.getIndex(), INDEX_TYPE_RULE.getType())
       .id(doc.key().toString())
       .routing(doc.getRouting())
-      .source(doc.getFields());
+      .source(doc.getFieldsWithoutId());
   }
 
   private static IndexRequest newRuleExtensionDocIndexRequest(RuleForIndexingDto ruleForIndexingDto) {
@@ -212,7 +212,7 @@ public class RuleIndexer implements StartupIndexer, ResilientIndexer {
       .id(ruleExtensionDoc.getId())
       .routing(ruleExtensionDoc.getRouting())
       .parent(ruleExtensionDoc.getParent())
-      .source(ruleExtensionDoc.getFields());
+      .source(ruleExtensionDoc.getFieldsWithoutId());
   }
 
   private static IndexRequest newRuleExtensionDocIndexRequest(RuleExtensionForIndexingDto ruleExtensionForIndexingDto) {
@@ -221,7 +221,7 @@ public class RuleIndexer implements StartupIndexer, ResilientIndexer {
       .id(doc.getId())
       .routing(doc.getRouting())
       .parent(doc.getParent())
-      .source(doc.getFields());
+      .source(doc.getFieldsWithoutId());
   }
 
   private BulkIndexer createBulkIndexer(Size bulkSize, IndexingListener listener) {

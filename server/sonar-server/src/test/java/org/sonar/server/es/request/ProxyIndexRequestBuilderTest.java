@@ -44,7 +44,7 @@ public class ProxyIndexRequestBuilderTest {
   @Test
   public void index_with_index_type_and_id() {
     IndexResponse response = esTester.client().prepareIndex(FakeIndexDefinition.INDEX_TYPE_FAKE)
-      .setSource(FakeIndexDefinition.newDoc(42).getFields())
+      .setSource(FakeIndexDefinition.newDoc(42).getFieldsWithoutId())
       .get();
     assertThat(response.isCreated()).isTrue();
   }
@@ -53,7 +53,7 @@ public class ProxyIndexRequestBuilderTest {
   public void trace_logs() {
     logTester.setLevel(LoggerLevel.TRACE);
     IndexResponse response = esTester.client().prepareIndex(FakeIndexDefinition.INDEX_TYPE_FAKE)
-      .setSource(FakeIndexDefinition.newDoc(42).getFields())
+      .setSource(FakeIndexDefinition.newDoc(42).getFieldsWithoutId())
       .get();
     assertThat(response.isCreated()).isTrue();
     assertThat(logTester.logs(LoggerLevel.TRACE)).hasSize(1);

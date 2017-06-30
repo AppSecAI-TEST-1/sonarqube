@@ -158,6 +158,6 @@ public class UserIndexer implements StartupIndexer, ResilientIndexer {
     return new IndexRequest(UserIndexDefinition.INDEX_TYPE_USER.getIndex(), UserIndexDefinition.INDEX_TYPE_USER.getType())
       .id(doc.getId())
       .routing(doc.getRouting())
-      .source(doc.getFields());
+      .source(doc.getFieldsWithoutId());
   }
 }

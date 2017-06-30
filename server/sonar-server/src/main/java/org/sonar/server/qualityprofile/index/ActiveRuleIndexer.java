@@ -220,7 +220,7 @@ public class ActiveRuleIndexer implements StartupIndexer, ResilientIndexer {
       .id(doc.getId())
       .parent(doc.getParent())
       .routing(doc.getRouting())
-      .source(doc.getFields());
+      .source(doc.getFieldsWithoutId());
   }
 
   private static EsQueueDto newQueueDto(String docId, String docIdType, @Nullable String routing) {
