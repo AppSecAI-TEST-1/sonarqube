@@ -20,11 +20,16 @@
 package org.sonar.db.event;
 
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.stream.IntStream;
 import javax.annotation.Nullable;
+import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.Dao;
 import org.sonar.db.DbSession;
 
+import static com.google.common.base.Preconditions.checkArgument;
+import static java.util.Objects.requireNonNull;
 import static org.sonar.db.DatabaseUtils.executeLargeInputs;
 
 public class EventDao implements Dao {
@@ -43,6 +48,16 @@ public class EventDao implements Dao {
 
   public List<EventDto> selectByAnalysisUuids(DbSession dbSession, List<String> analyses) {
     return executeLargeInputs(analyses, mapper(dbSession)::selectByAnalysisUuids);
+  }
+
+  public List<EventDto> selectByComponentUuidsAndFromDates(DbSession dbSession, List<String> componentUuids, List<Long> fromDates) {
+    checkArgument(componentUuids.size() == fromDates.size(), "The number of components (%s) and from dates (%s) must be the same.",
+      String.valueOf(componentUuids.size()),
+      String.valueOf(fromDates.size()));
+    List<ComponentUuidFromDatePair> componentUuidFromDatePairs = IntStream.range(0, componentUuids.size())
+      .mapToObj(i -> new ComponentUuidFromDatePair(componentUuids.get(i), fromDates.get(i)))
+      .collect(MoreCollectors.toList(componentUuids.size()));
+    return executeLargeInputs(componentUuidFromDatePairs, partition -> mapper(dbSession).selectByQuery(partition), i -> i / 2);
   }
 
   public EventDto insert(DbSession session, EventDto dto) {
@@ -65,5 +80,48 @@ public class EventDao implements Dao {
 
   private static EventMapper mapper(DbSession session) {
     return session.getMapper(EventMapper.class);
+  }
+
+  static class ComponentUuidFromDatePair implements Comparable<ComponentUuidFromDatePair> {
+    private final String componentUuid;
+    private final long from;
+
+    ComponentUuidFromDatePair(String componentUuid, long from) {
+      this.componentUuid = requireNonNull(componentUuid);
+      this.from = from;
+    }
+
+    @Override
+    public int compareTo(ComponentUuidFromDatePair other) {
+      if (this == other) {
+        return 0;
+      }
+
+      int c = componentUuid.compareTo(other.componentUuid);
+      if (c == 0) {
+        c = Long.compare(from, other.from);
+      }
+
+      return c;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
+
+      ComponentUuidFromDatePair other = (ComponentUuidFromDatePair) o;
+      return componentUuid.equals(other.componentUuid)
+      && from == other.from;
+    }
+
+    @Override
+    public int hashCode() {
+      return Objects.hash(componentUuid, from);
+    }
   }
 }

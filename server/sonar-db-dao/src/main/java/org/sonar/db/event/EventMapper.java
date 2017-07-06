@@ -22,6 +22,7 @@ package org.sonar.db.event;
 import java.util.List;
 import javax.annotation.Nullable;
 import org.apache.ibatis.annotations.Param;
+import org.sonar.db.event.EventDao.ComponentUuidFromDatePair;
 
 public interface EventMapper {
 
@@ -40,4 +41,6 @@ public interface EventMapper {
   void deleteById(long id);
 
   void deleteByUuid(String uuid);
+
+  List<EventDto> selectByQuery(@Param("componentUuidFromDatePairs") List<ComponentUuidFromDatePair> componentUuidFromDatePairs);
 }
