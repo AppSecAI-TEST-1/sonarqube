@@ -104,7 +104,7 @@ public class IssueIndexerTest {
     IssueDto issue1 = dbTester.issues().insertIssue(IssueTesting.newDto(rule, file, project));
     IssueDto issue2 = dbTester.issues().insertIssue(IssueTesting.newDto(rule, file, project));
 
-    underTest.index(asList(issue1.getKey()));
+    underTest.commitAndIndexIssues(asList(issue1.getKey()));
 
     List<IssueDoc> docs = esTester.getDocuments(IssueIndexDefinition.INDEX_TYPE_ISSUE, IssueDoc.class);
     assertThat(docs).hasSize(1);
@@ -114,7 +114,7 @@ public class IssueIndexerTest {
   @Test
   public void index_throws_NoSuchElementException_if_the_specified_key_does_not_exist() {
     try {
-      underTest.index(asList("does_not_exist"));
+      underTest.commitAndIndexIssues(asList("does_not_exist"));
       fail();
     } catch (NoSuchElementException e) {
       assertThat(esTester.countDocuments(IssueIndexDefinition.INDEX_TYPE_ISSUE)).isEqualTo(0);
@@ -132,7 +132,7 @@ public class IssueIndexerTest {
     IssueDto issue1 = dbTester.issues().insertIssue(IssueTesting.newDto(rule, file1, project1));
     IssueDto issue2 = dbTester.issues().insertIssue(IssueTesting.newDto(rule, file2, project2));
 
-    underTest.indexProject(project1.projectUuid(), ProjectIndexer.Cause.NEW_ANALYSIS);
+    underTest.indexOnAnalysis(project1.projectUuid(), ProjectIndexer.Cause.NEW_ANALYSIS);
 
     List<IssueDoc> docs = esTester.getDocuments(IssueIndexDefinition.INDEX_TYPE_ISSUE, IssueDoc.class);
     assertThat(docs).hasSize(1);
@@ -156,7 +156,7 @@ public class IssueIndexerTest {
     RuleDto rule = dbTester.rules().insertRule();
     IssueDto issue = dbTester.issues().insertIssue(IssueTesting.newDto(rule, file, project));
 
-    underTest.indexProject(project.projectUuid(), cause);
+    underTest.indexOnAnalysis(project.projectUuid(), cause);
 
     assertThat(esTester.countDocuments(IssueIndexDefinition.INDEX_TYPE_ISSUE)).isEqualTo(0);
   }

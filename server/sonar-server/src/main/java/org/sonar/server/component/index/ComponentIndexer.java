@@ -19,26 +19,34 @@
  */
 package org.sonar.server.component.index;
 
+import com.google.common.annotations.VisibleForTesting;
 import com.google.common.collect.ImmutableSet;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 import javax.annotation.Nullable;
 import org.elasticsearch.action.index.IndexRequest;
+import org.elasticsearch.action.search.SearchRequestBuilder;
+import org.elasticsearch.index.query.QueryBuilders;
+import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
+import org.sonar.db.es.EsQueueDto;
 import org.sonar.server.es.BulkIndexer;
 import org.sonar.server.es.BulkIndexer.Size;
 import org.sonar.server.es.EsClient;
 import org.sonar.server.es.IndexType;
+import org.sonar.server.es.IndexingResult;
+import org.sonar.server.es.OneToManyResilientIndexingListener;
 import org.sonar.server.es.ProjectIndexer;
 import org.sonar.server.es.StartupIndexer;
 import org.sonar.server.permission.index.AuthorizationScope;
 import org.sonar.server.permission.index.NeedAuthorizationIndexer;
 
-import static org.elasticsearch.index.query.QueryBuilders.boolQuery;
-import static org.elasticsearch.index.query.QueryBuilders.termQuery;
+import static java.util.Collections.emptyList;
 import static org.sonar.server.component.index.ComponentIndexDefinition.INDEX_TYPE_COMPONENT;
 
 public class ComponentIndexer implements ProjectIndexer, NeedAuthorizationIndexer, StartupIndexer {
@@ -55,7 +63,7 @@ public class ComponentIndexer implements ProjectIndexer, NeedAuthorizationIndexe
 
   @Override
   public Set<IndexType> getIndexTypes() {
-    return ImmutableSet.of(ComponentIndexDefinition.INDEX_TYPE_COMPONENT);
+    return ImmutableSet.of(INDEX_TYPE_COMPONENT);
   }
 
   @Override
@@ -64,15 +72,31 @@ public class ComponentIndexer implements ProjectIndexer, NeedAuthorizationIndexe
   }
 
   @Override
-  public void indexProject(String projectUuid, Cause cause) {
+  public void indexOnAnalysis(String projectUuid) {
+    doIndexByProjectUuid(projectUuid, Size.REGULAR);
+  }
+
+  @Override
+  public AuthorizationScope getAuthorizationScope() {
+    return AUTHORIZATION_SCOPE;
+  }
+
+  @Override
+  public Collection<EsQueueDto> prepareForRecovery(DbSession dbSession, Collection<String> projectUuids, Cause cause) {
     switch (cause) {
       case PROJECT_TAGS_UPDATE:
-        break;
+      case PERMISSION_CHANGE:
+        // tags and permissions are not part of type components/component
+        return emptyList();
+
       case PROJECT_CREATION:
+      case PROJECT_DELETION:
       case PROJECT_KEY_UPDATE:
-      case NEW_ANALYSIS:
-        doIndexByProjectUuid(projectUuid, Size.REGULAR);
-        break;
+        List<EsQueueDto> items = projectUuids.stream()
+          .map(projectUuid -> EsQueueDto.create(INDEX_TYPE_COMPONENT.format(), projectUuid, null, projectUuid))
+          .collect(MoreCollectors.toArrayList(projectUuids.size()));
+        return dbClient.esQueueDao().insert(dbSession, items);
+
       default:
         // defensive case
         throw new IllegalStateException("Unsupported cause: " + cause);
@@ -80,8 +104,31 @@ public class ComponentIndexer implements ProjectIndexer, NeedAuthorizationIndexe
   }
 
   @Override
-  public AuthorizationScope getAuthorizationScope() {
-    return AUTHORIZATION_SCOPE;
+  public IndexingResult index(DbSession dbSession, Collection<EsQueueDto> items) {
+    if (items.isEmpty()) {
+      return new IndexingResult();
+    }
+
+    OneToManyResilientIndexingListener listener = new OneToManyResilientIndexingListener(dbClient, dbSession, items);
+    BulkIndexer bulkIndexer = new BulkIndexer(esClient, INDEX_TYPE_COMPONENT, Size.REGULAR, listener);
+    bulkIndexer.start();
+    Set<String> projectUuids = items.stream().map(EsQueueDto::getDocId).collect(MoreCollectors.toHashSet(items.size()));
+    Set<String> remaining = new HashSet<>(projectUuids);
+
+    for (String projectUuid : projectUuids) {
+      // TODO allow scrolling multiple projects at the same time
+      dbClient.componentDao().scrollForIndexing(dbSession, projectUuid, context -> {
+        ComponentDto dto = context.getResultObject();
+        bulkIndexer.add(newIndexRequest(toDocument(dto)));
+        remaining.remove(dto.projectUuid());
+      });
+    }
+
+    // the remaining uuids reference projects that don't exist in db. They must
+    // be deleted from index.
+    remaining.forEach(projectUuid -> addProjectDeletionToBulkIndexer(bulkIndexer, projectUuid));
+
+    return bulkIndexer.stop();
   }
 
   /**
@@ -94,7 +141,7 @@ public class ComponentIndexer implements ProjectIndexer, NeedAuthorizationIndexe
     bulk.start();
     try (DbSession dbSession = dbClient.openSession(false)) {
       dbClient.componentDao()
-        .selectForIndexing(dbSession, projectUuid, context -> {
+        .scrollForIndexing(dbSession, projectUuid, context -> {
           ComponentDto dto = context.getResultObject();
           bulk.add(newIndexRequest(toDocument(dto)));
         });
@@ -102,17 +149,11 @@ public class ComponentIndexer implements ProjectIndexer, NeedAuthorizationIndexe
     bulk.stop();
   }
 
-  @Override
-  public void deleteProject(String projectUuid) {
-    BulkIndexer.delete(esClient, INDEX_TYPE_COMPONENT, esClient.prepareSearch(INDEX_TYPE_COMPONENT)
-      .setQuery(boolQuery()
-        .filter(
-          termQuery(ComponentIndexDefinition.FIELD_PROJECT_UUID, projectUuid))));
-  }
-
-  @Override
-  public void createEsQueueForIndexing(DbSession dbSession, String projectUuid) {
-    // FIXME
+  private void addProjectDeletionToBulkIndexer(BulkIndexer bulkIndexer, String projectUuid) {
+    SearchRequestBuilder searchRequest = esClient.prepareSearch(INDEX_TYPE_COMPONENT)
+      .setQuery(QueryBuilders.termQuery(ComponentIndexDefinition.FIELD_PROJECT_UUID, projectUuid))
+      .setRouting(projectUuid);
+    bulkIndexer.addDeletion(searchRequest);
   }
 
   public void delete(String projectUuid, Collection<String> disabledComponentUuids) {
@@ -122,6 +163,7 @@ public class ComponentIndexer implements ProjectIndexer, NeedAuthorizationIndexe
     bulk.stop();
   }
 
+  @VisibleForTesting
   void index(ComponentDto... docs) {
     BulkIndexer bulk = new BulkIndexer(esClient, INDEX_TYPE_COMPONENT, Size.REGULAR);
     bulk.start();

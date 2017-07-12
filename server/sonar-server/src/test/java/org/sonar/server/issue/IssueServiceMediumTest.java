@@ -168,7 +168,7 @@ public class IssueServiceMediumTest {
   private IssueDto saveIssue(IssueDto issue) {
     tester.get(IssueDao.class).insert(session, issue);
     session.commit();
-    tester.get(IssueIndexer.class).index(asList(issue.getKey()));
+    tester.get(IssueIndexer.class).commitAndIndexIssues(asList(issue.getKey()));
     return issue;
   }
 

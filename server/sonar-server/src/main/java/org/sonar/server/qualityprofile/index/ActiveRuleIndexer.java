@@ -45,9 +45,8 @@ import org.sonar.server.es.EsClient;
 import org.sonar.server.es.IndexType;
 import org.sonar.server.es.IndexingListener;
 import org.sonar.server.es.IndexingResult;
-import org.sonar.server.es.ResiliencyIndexingListener;
+import org.sonar.server.es.OneToOneResilientIndexingListener;
 import org.sonar.server.es.ResilientIndexer;
-import org.sonar.server.es.StartupIndexer;
 import org.sonar.server.qualityprofile.ActiveRule;
 import org.sonar.server.qualityprofile.ActiveRuleChange;
 import org.sonar.server.rule.index.RuleIndexDefinition;
@@ -57,7 +56,7 @@ import static org.sonar.core.util.stream.MoreCollectors.toArrayList;
 import static org.sonar.server.rule.index.RuleIndexDefinition.FIELD_ACTIVE_RULE_PROFILE_UUID;
 import static org.sonar.server.rule.index.RuleIndexDefinition.INDEX_TYPE_ACTIVE_RULE;
 
-public class ActiveRuleIndexer implements StartupIndexer, ResilientIndexer {
+public class ActiveRuleIndexer implements ResilientIndexer {
 
   private static final Logger LOGGER = Loggers.get(ActiveRuleIndexer.class);
   private static final String ID_TYPE_ACTIVE_RULE_ID = "activeRuleId";
@@ -74,7 +73,7 @@ public class ActiveRuleIndexer implements StartupIndexer, ResilientIndexer {
   @Override
   public void indexOnStartup(Set<IndexType> uninitializedIndexTypes) {
     try (DbSession dbSession = dbClient.openSession(false)) {
-      BulkIndexer bulkIndexer = createBulkIndexer(Size.LARGE, IndexingListener.noop());
+      BulkIndexer bulkIndexer = createBulkIndexer(Size.LARGE, IndexingListener.NOOP);
       bulkIndexer.start();
       dbClient.activeRuleDao().scrollAllForIndexing(dbSession, ar -> bulkIndexer.add(newIndexRequest(ar)));
       bulkIndexer.stop();
@@ -83,7 +82,7 @@ public class ActiveRuleIndexer implements StartupIndexer, ResilientIndexer {
 
   @Override
   public Set<IndexType> getIndexTypes() {
-    return ImmutableSet.of(RuleIndexDefinition.INDEX_TYPE_ACTIVE_RULE);
+    return ImmutableSet.of(INDEX_TYPE_ACTIVE_RULE);
   }
 
   public void commitAndIndex(DbSession dbSession, Collection<ActiveRuleChange> changes) {
@@ -150,12 +149,11 @@ public class ActiveRuleIndexer implements StartupIndexer, ResilientIndexer {
   }
 
   private IndexingResult doIndexActiveRules(DbSession dbSession, Map<Long, EsQueueDto> activeRuleItems) {
-    BulkIndexer bulkIndexer = createBulkIndexer(Size.REGULAR, new ResiliencyIndexingListener(dbClient, dbSession, activeRuleItems.values()));
+    OneToOneResilientIndexingListener listener = new OneToOneResilientIndexingListener(dbClient, dbSession, activeRuleItems.values());
+    BulkIndexer bulkIndexer = createBulkIndexer(Size.REGULAR, listener);
     bulkIndexer.start();
     Map<Long, EsQueueDto> remaining = new HashMap<>(activeRuleItems);
     dbClient.activeRuleDao().scrollByIdsForIndexing(dbSession, activeRuleItems.keySet(),
-      // only index requests, no deletion requests.
-      // Deactivated users are not deleted but updated.
       i -> {
         remaining.remove(i.getId());
         bulkIndexer.add(newIndexRequest(i));
@@ -184,7 +182,7 @@ public class ActiveRuleIndexer implements StartupIndexer, ResilientIndexer {
         profileResult = BulkIndexer.delete(esClient, INDEX_TYPE_ACTIVE_RULE, search);
 
       } else {
-        BulkIndexer bulkIndexer = createBulkIndexer(Size.REGULAR, IndexingListener.noop());
+        BulkIndexer bulkIndexer = createBulkIndexer(Size.REGULAR, IndexingListener.NOOP);
         bulkIndexer.start();
         dbClient.activeRuleDao().scrollByRuleProfileForIndexing(dbSession, ruleProfileUUid, i -> bulkIndexer.add(newIndexRequest(i)));
         profileResult = bulkIndexer.stop();
@@ -224,6 +222,6 @@ public class ActiveRuleIndexer implements StartupIndexer, ResilientIndexer {
   }
 
   private static EsQueueDto newQueueDto(String docId, String docIdType, @Nullable String routing) {
-    return EsQueueDto.create(EsQueueDto.Type.ACTIVE_RULE, docId, docIdType, routing);
+    return EsQueueDto.create(INDEX_TYPE_ACTIVE_RULE.format(), docId, docIdType, routing);
   }
 }

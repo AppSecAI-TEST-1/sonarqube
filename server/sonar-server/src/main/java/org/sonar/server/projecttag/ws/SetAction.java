@@ -32,9 +32,10 @@ import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
 import org.sonar.db.component.ComponentDto;
 import org.sonar.server.component.ComponentFinder;
-import org.sonar.server.es.ResilientProjectIndexers;
+import org.sonar.server.es.ProjectIndexers;
 import org.sonar.server.user.UserSession;
 
+import static java.util.Collections.singletonList;
 import static org.sonar.api.resources.Qualifiers.PROJECT;
 import static org.sonar.server.es.ProjectIndexer.Cause.PROJECT_TAGS_UPDATE;
 import static org.sonar.server.ws.KeyExamples.KEY_PROJECT_EXAMPLE_001;
@@ -52,9 +53,9 @@ public class SetAction implements ProjectTagsWsAction {
   private final DbClient dbClient;
   private final ComponentFinder componentFinder;
   private final UserSession userSession;
-  private final ResilientProjectIndexers projectIndexers;
+  private final ProjectIndexers projectIndexers;
 
-  public SetAction(DbClient dbClient, ComponentFinder componentFinder, UserSession userSession, ResilientProjectIndexers projectIndexers) {
+  public SetAction(DbClient dbClient, ComponentFinder componentFinder, UserSession userSession, ProjectIndexers projectIndexers) {
     this.dbClient = dbClient;
     this.componentFinder = componentFinder;
     this.userSession = userSession;
@@ -98,7 +99,7 @@ public class SetAction implements ProjectTagsWsAction {
 
       project.setTags(tags);
       dbClient.componentDao().updateTags(dbSession, project);
-      projectIndexers.commitAndIndex(dbSession, project.uuid(), PROJECT_TAGS_UPDATE);
+      projectIndexers.commitAndIndex(dbSession, singletonList(project.uuid()), PROJECT_TAGS_UPDATE);
     }
 
     response.noContent();

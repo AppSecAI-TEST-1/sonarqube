@@ -20,22 +20,27 @@
 
 package org.sonar.server.es;
 
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.List;
 import org.sonar.db.DbSession;
 import org.sonar.db.es.EsQueueDto;
 
-/**
- * This kind of indexers that are resilient
- */
-public interface ResilientIndexer extends StartupIndexer {
+import static java.util.Arrays.asList;
 
-  /**
-   * Index the items and delete them from es_queue table when the indexation
-   * is done, keep it if there is a failure on the item of the collection
-   *
-   * @param dbSession the db session
-   * @param items     the items to be indexed
-   * @return the number of successful indexation
-   */
-  IndexingResult index(DbSession dbSession, Collection<EsQueueDto> items);
+public class ProjectIndexersImpl implements ProjectIndexers {
+
+  private final List<ProjectIndexer> indexers;
+
+  public ProjectIndexersImpl(ProjectIndexer... indexers) {
+    this.indexers = asList(indexers);
+  }
+
+  @Override
+  public void commitAndIndex(DbSession dbSession, Collection<String> projectUuids, ProjectIndexer.Cause cause) {
+    List<EsQueueDto> items = new ArrayList<>();
+    indexers.forEach(i -> items.addAll(i.prepareForRecovery(dbSession, projectUuids, cause)));
+    dbSession.commit();
+    indexers.forEach(i -> i.index(dbSession, items));
+  }
 }

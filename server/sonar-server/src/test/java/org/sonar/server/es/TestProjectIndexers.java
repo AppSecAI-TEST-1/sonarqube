@@ -17,25 +17,23 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
-
 package org.sonar.server.es;
 
-import java.util.Collection;
+import com.google.common.collect.ArrayListMultimap;
+import com.google.common.collect.ListMultimap;
 import org.sonar.db.DbSession;
-import org.sonar.db.es.EsQueueDto;
 
-/**
- * This kind of indexers that are resilient
- */
-public interface ResilientIndexer extends StartupIndexer {
+public class TestProjectIndexers implements ProjectIndexers {
 
-  /**
-   * Index the items and delete them from es_queue table when the indexation
-   * is done, keep it if there is a failure on the item of the collection
-   *
-   * @param dbSession the db session
-   * @param items     the items to be indexed
-   * @return the number of successful indexation
-   */
-  IndexingResult index(DbSession dbSession, Collection<EsQueueDto> items);
+  private final ListMultimap<String, ProjectIndexer.Cause> calls = ArrayListMultimap.create();
+
+  @Override
+  public void commitAndIndex(DbSession dbSession, String projectUuid, ProjectIndexer.Cause cause) {
+    dbSession.commit();
+    calls.put(projectUuid, cause);
+  }
+
+  public boolean hasBeenCalled(String projectUuid, ProjectIndexer.Cause expectedCause) {
+    return calls.get(projectUuid).contains(expectedCause);
+  }
 }

@@ -95,7 +95,7 @@ public class TestIndexerTest {
 
     TestTesting.updateDataColumn(db.getSession(), "FILE_UUID", TestTesting.newRandomTests(3));
 
-    underTest.indexProject("PROJECT_UUID", ProjectIndexer.Cause.NEW_ANALYSIS);
+    underTest.indexOnAnalysis("PROJECT_UUID", ProjectIndexer.Cause.NEW_ANALYSIS);
     assertThat(countDocuments()).isEqualTo(3);
   }
 
@@ -105,7 +105,7 @@ public class TestIndexerTest {
 
     TestTesting.updateDataColumn(db.getSession(), "FILE_UUID", TestTesting.newRandomTests(3));
 
-    underTest.indexProject("UNKNOWN", ProjectIndexer.Cause.NEW_ANALYSIS);
+    underTest.indexOnAnalysis("UNKNOWN", ProjectIndexer.Cause.NEW_ANALYSIS);
     assertThat(countDocuments()).isZero();
   }
 

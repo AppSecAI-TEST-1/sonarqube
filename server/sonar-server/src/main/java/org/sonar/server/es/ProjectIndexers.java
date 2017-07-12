@@ -20,26 +20,13 @@
 
 package org.sonar.server.es;
 
-import java.util.List;
+import java.util.Collection;
 import org.sonar.db.DbSession;
 
-public class ResilientProjectIndexers {
+public interface ProjectIndexers {
 
-  private final List<ProjectIndexer> indexers;
-
-  public ResilientProjectIndexers(List<ProjectIndexer> indexers) {
-    this.indexers = indexers;
-  }
-
-  public void commitAndIndex(DbSession dbSession, String projectUuid, ProjectIndexer.Cause cause) {
-    indexers.forEach(i -> i.createEsQueueForIndexing(dbSession, projectUuid));
-    dbSession.commit();
-    indexers.forEach(i -> i.indexProject(projectUuid, cause));
-  }
-
-  public void deleteAndIndex(DbSession dbSession, String projectUuid) {
-    indexers.forEach(i -> i.createEsQueueForIndexing(dbSession, projectUuid));
-    dbSession.commit();
-    indexers.forEach(i -> i.deleteProject(projectUuid));
-  }
+  /**
+   * TODO javadoc
+   */
+  void commitAndIndex(DbSession dbSession, Collection<String> projectUuid, ProjectIndexer.Cause cause);
 }

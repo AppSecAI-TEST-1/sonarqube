@@ -83,7 +83,7 @@ public class PermissionIndexerTest {
 
     // Simulate a indexation issue
     dbTester.getDbClient().componentDao().delete(dbTester.getSession(), project1.getId());
-    underTest.createEsQueueForIndexing(dbTester.getSession(), project1.uuid());
+    underTest.prepareForRecovery(dbTester.getSession(), project1.uuid());
     assertThat(dbTester.countRowsOfTable(dbTester.getSession(), "es_queue")).isEqualTo(1);
     Collection<EsQueueDto> esQueueDtos = dbTester.getDbClient().esQueueDao().selectForRecovery(dbTester.getSession(), Long.MAX_VALUE, 2);
 
@@ -235,9 +235,9 @@ public class PermissionIndexerTest {
   public void indexProject_does_nothing_because_authorizations_are_triggered_outside_standard_indexer_lifecycle() {
     ComponentDto project = createAndIndexPublicProject();
 
-    underTest.indexProject(project.uuid(), ProjectIndexer.Cause.NEW_ANALYSIS);
-    underTest.indexProject(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
-    underTest.indexProject(project.uuid(), ProjectIndexer.Cause.PROJECT_KEY_UPDATE);
+    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.NEW_ANALYSIS);
+    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
+    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.PROJECT_KEY_UPDATE);
 
     assertThat(esTester.countDocuments(INDEX_TYPE_FOO_AUTH)).isEqualTo(0);
   }
@@ -301,7 +301,7 @@ public class PermissionIndexerTest {
 
   private ComponentDto createAndIndexPublicProject() {
     ComponentDto project = componentDbTester.insertPublicProject();
-    fooIndexer.indexProject(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
+    fooIndexer.indexOnNewAnalysis(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
     return project;
   }
 
@@ -312,19 +312,19 @@ public class PermissionIndexerTest {
 
   private ComponentDto createAndIndexPrivateProject() {
     ComponentDto project = componentDbTester.insertPrivateProject();
-    fooIndexer.indexProject(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
+    fooIndexer.indexOnNewAnalysis(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
     return project;
   }
 
   private ComponentDto createAndIndexView() {
     ComponentDto project = componentDbTester.insertView();
-    fooIndexer.indexProject(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
+    fooIndexer.indexOnNewAnalysis(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
     return project;
   }
 
   private ComponentDto createAndIndexPublicProject(OrganizationDto org) {
     ComponentDto project = componentDbTester.insertPublicProject(org);
-    fooIndexer.indexProject(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
+    fooIndexer.indexOnNewAnalysis(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
     return project;
   }
 }

@@ -233,7 +233,7 @@ public class TagsActionTest {
     IssueDto issue = dbTester.issues().insertIssue(organization, i -> i.setRule(rule).setTags(asList(tags)));
     ComponentDto project = dbTester.getDbClient().componentDao().selectByUuid(dbTester.getSession(), issue.getProjectUuid()).get();
     userSession.addProjectPermission(USER, project);
-    issueIndexer.index(Collections.singletonList(issue.getKey()));
+    issueIndexer.commitAndIndexIssues(Collections.singletonList(issue.getKey()));
     return issue;
   }
 

@@ -105,7 +105,7 @@ public class ProjectMeasuresIndexerTest {
   public void indexProject_indexes_provisioned_project() {
     ComponentDto project = componentDbTester.insertPrivateProject();
 
-    underTest.indexProject(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
+    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
 
     assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(project.uuid());
   }
@@ -114,7 +114,7 @@ public class ProjectMeasuresIndexerTest {
   public void indexProject_indexes_project_when_its_key_is_updated() {
     ComponentDto project = componentDbTester.insertPrivateProject();
 
-    underTest.indexProject(project.uuid(), ProjectIndexer.Cause.PROJECT_KEY_UPDATE);
+    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.PROJECT_KEY_UPDATE);
 
     assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(project.uuid());
   }
@@ -126,7 +126,7 @@ public class ProjectMeasuresIndexerTest {
     componentDbTester.insertProjectAndSnapshot(project);
     componentDbTester.insertProjectAndSnapshot(ComponentTesting.newPrivateProjectDto(organizationDto));
 
-    underTest.indexProject(project.uuid(), ProjectIndexer.Cause.NEW_ANALYSIS);
+    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.NEW_ANALYSIS);
 
     assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(project.uuid());
   }
@@ -143,7 +143,7 @@ public class ProjectMeasuresIndexerTest {
     ComponentDto project = newPrivateProjectDto(dbTester.getDefaultOrganization(), uuid).setKey("New key").setName("New name").setTagsString("new tag");
     SnapshotDto analysis = componentDbTester.insertProjectAndSnapshot(project);
 
-    underTest.indexProject(project.uuid(), ProjectIndexer.Cause.NEW_ANALYSIS);
+    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.NEW_ANALYSIS);
 
     assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(uuid);
     SearchRequestBuilder request = esTester.client()

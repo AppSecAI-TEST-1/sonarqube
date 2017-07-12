@@ -74,7 +74,7 @@ public class BulkIndexer {
   private final SizeHandler sizeHandler;
 
   public BulkIndexer(EsClient client, IndexType indexType, Size size) {
-    this(client, indexType, size, IndexingListener.noop());
+    this(client, indexType, size, IndexingListener.NOOP);
   }
 
   public BulkIndexer(EsClient client, IndexType indexType, Size size, IndexingListener indexingListener) {
@@ -112,10 +112,11 @@ public class BulkIndexer {
     }
     client.prepareRefresh(indexType.getIndex()).get();
     sizeHandler.afterStop(this);
+    indexingListener.onFinish(result);
     return result;
   }
 
-  public void add(ActionRequest<?> request) {
+  public void add(ActionRequest request) {
     result.incrementRequests();
     bulkProcessor.add(request);
   }
@@ -184,16 +185,15 @@ public class BulkIndexer {
 
     @Override
     public void afterBulk(long executionId, BulkRequest request, BulkResponse response) {
-      List<String> successDocIds = new ArrayList<>();
+      List<DocId> successDocIds = new ArrayList<>();
       for (BulkItemResponse item : response.getItems()) {
         if (item.isFailed()) {
           LOGGER.error("index [{}], type [{}], id [{}], message [{}]", item.getIndex(), item.getType(), item.getId(), item.getFailureMessage());
         } else {
           result.incrementSuccess();
-          successDocIds.add(item.getId());
+          successDocIds.add(new DocId(item.getIndex(), item.getType(), item.getId()));
         }
       }
-
       indexingListener.onSuccess(successDocIds);
     }
 

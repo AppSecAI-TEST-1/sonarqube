@@ -20,20 +20,28 @@
 package org.sonar.server.measure.index;
 
 import com.google.common.collect.ImmutableSet;
+import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
+import java.util.List;
 import java.util.Set;
 import javax.annotation.Nullable;
 import org.elasticsearch.action.index.IndexRequest;
 import org.sonar.api.resources.Qualifiers;
+import org.sonar.core.util.stream.MoreCollectors;
 import org.sonar.db.DbClient;
 import org.sonar.db.DbSession;
+import org.sonar.db.es.EsQueueDto;
 import org.sonar.db.measure.ProjectMeasuresIndexerIterator;
 import org.sonar.db.measure.ProjectMeasuresIndexerIterator.ProjectMeasures;
 import org.sonar.server.es.BulkIndexer;
 import org.sonar.server.es.BulkIndexer.Size;
 import org.sonar.server.es.EsClient;
 import org.sonar.server.es.IndexType;
+import org.sonar.server.es.IndexingListener;
+import org.sonar.server.es.IndexingResult;
+import org.sonar.server.es.OneToOneResilientIndexingListener;
 import org.sonar.server.es.ProjectIndexer;
 import org.sonar.server.es.StartupIndexer;
 import org.sonar.server.permission.index.AuthorizationScope;
@@ -60,7 +68,7 @@ public class ProjectMeasuresIndexer implements ProjectIndexer, NeedAuthorization
 
   @Override
   public void indexOnStartup(Set<IndexType> uninitializedIndexTypes) {
-    doIndex(createBulkIndexer(Size.LARGE), (String) null);
+    doIndex(createBulkIndexer(Size.LARGE, IndexingListener.NOOP), (String) null);
   }
 
   @Override
@@ -69,16 +77,28 @@ public class ProjectMeasuresIndexer implements ProjectIndexer, NeedAuthorization
   }
 
   @Override
-  public void indexProject(String projectUuid, Cause cause) {
+  public void indexOnAnalysis(String projectUuid) {
+    doIndex(createBulkIndexer(Size.REGULAR, IndexingListener.NOOP), projectUuid);
+  }
+
+  @Override
+  public Collection<EsQueueDto> prepareForRecovery(DbSession dbSession, Collection<String> projectUuids, ProjectIndexer.Cause cause) {
     switch (cause) {
+      case PERMISSION_CHANGE:
+        // nothing to do, permissions are not used in type projectmeasures/projectmeasure
+        return Collections.emptyList();
+
       case PROJECT_KEY_UPDATE:
         // project must be re-indexed because key is used in this index
       case PROJECT_CREATION:
         // provisioned projects are supported by WS api/components/search_projects
-      case NEW_ANALYSIS:
       case PROJECT_TAGS_UPDATE:
-        doIndex(createBulkIndexer(Size.REGULAR), projectUuid);
-        break;
+      case PROJECT_DELETION:
+        List<EsQueueDto> items = projectUuids.stream()
+          .map(projectUuid -> EsQueueDto.create(INDEX_TYPE_PROJECT_MEASURES.format(), projectUuid, null, projectUuid))
+          .collect(MoreCollectors.toArrayList(projectUuids.size()));
+        return dbClient.esQueueDao().insert(dbSession, items);
+
       default:
         // defensive case
         throw new IllegalStateException("Unsupported cause: " + cause);
@@ -86,17 +106,29 @@ public class ProjectMeasuresIndexer implements ProjectIndexer, NeedAuthorization
   }
 
   @Override
-  public void deleteProject(String uuid) {
-    esClient
-      .prepareDelete(INDEX_TYPE_PROJECT_MEASURES, uuid)
-      .setRouting(uuid)
-      .setRefresh(true)
-      .get();
-  }
+  public IndexingResult index(DbSession dbSession, Collection<EsQueueDto> items) {
+    if (items.isEmpty()) {
+      return new IndexingResult();
+    }
+    OneToOneResilientIndexingListener listener = new OneToOneResilientIndexingListener(dbClient, dbSession, items);
+    BulkIndexer bulkIndexer = createBulkIndexer(Size.REGULAR, listener);
+    bulkIndexer.start();
 
-  @Override
-  public void createEsQueueForIndexing(DbSession dbSession, String projectUuid) {
-    // FIXME
+    List<String> projectUuids = items.stream().map(EsQueueDto::getDocId).collect(MoreCollectors.toArrayList(items.size()));
+    Iterator<String> it = projectUuids.iterator();
+    while (it.hasNext()) {
+      String projectUuid = it.next();
+      try (ProjectMeasuresIndexerIterator rowIt = ProjectMeasuresIndexerIterator.create(dbSession, projectUuid)) {
+        bulkIndexer.add(newIndexRequest(toProjectMeasuresDoc(rowIt.next())));
+        it.remove();
+      }
+    }
+
+    // the remaining uuids reference issues that don't exist in db. They must
+    // be deleted from index.
+    projectUuids.forEach(projectUuid -> bulkIndexer.addDeletion(INDEX_TYPE_PROJECT_MEASURES, projectUuid, projectUuid));
+
+    return bulkIndexer.stop();
   }
 
   private void doIndex(BulkIndexer bulk, @Nullable String projectUuid) {
@@ -115,8 +147,8 @@ public class ProjectMeasuresIndexer implements ProjectIndexer, NeedAuthorization
     bulk.stop();
   }
 
-  private BulkIndexer createBulkIndexer(Size bulkSize) {
-    return new BulkIndexer(esClient, INDEX_TYPE_PROJECT_MEASURES, bulkSize);
+  private BulkIndexer createBulkIndexer(Size bulkSize, IndexingListener listener) {
+    return new BulkIndexer(esClient, INDEX_TYPE_PROJECT_MEASURES, bulkSize, listener);
   }
 
   private static IndexRequest newIndexRequest(ProjectMeasuresDoc doc) {
