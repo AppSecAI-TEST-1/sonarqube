@@ -55,7 +55,7 @@ public class OneToOneResilientIndexingListener implements IndexingListener {
   public void onSuccess(List<DocId> successDocIds) {
     if (!successDocIds.isEmpty()) {
       Collection<EsQueueDto> itemsToDelete = successDocIds.stream()
-        .map(itemsById::removeAll)
+        .map(itemsById::get)
         .flatMap(Collection::stream)
         .filter(Objects::nonNull)
         .collect(MoreCollectors.toArrayList());
