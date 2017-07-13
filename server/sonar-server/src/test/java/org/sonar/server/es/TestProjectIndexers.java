@@ -21,6 +21,7 @@ package org.sonar.server.es;
 
 import com.google.common.collect.ArrayListMultimap;
 import com.google.common.collect.ListMultimap;
+import java.util.Collection;
 import org.sonar.db.DbSession;
 
 public class TestProjectIndexers implements ProjectIndexers {
@@ -28,9 +29,10 @@ public class TestProjectIndexers implements ProjectIndexers {
   private final ListMultimap<String, ProjectIndexer.Cause> calls = ArrayListMultimap.create();
 
   @Override
-  public void commitAndIndex(DbSession dbSession, String projectUuid, ProjectIndexer.Cause cause) {
+  public void commitAndIndex(DbSession dbSession, Collection<String> projectUuids, ProjectIndexer.Cause cause) {
     dbSession.commit();
-    calls.put(projectUuid, cause);
+    projectUuids.forEach(projectUuid -> calls.put(projectUuid, cause));
+
   }
 
   public boolean hasBeenCalled(String projectUuid, ProjectIndexer.Cause expectedCause) {

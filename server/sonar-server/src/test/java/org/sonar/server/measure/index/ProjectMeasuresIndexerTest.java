@@ -32,7 +32,6 @@ import org.sonar.db.component.ComponentTesting;
 import org.sonar.db.component.SnapshotDto;
 import org.sonar.db.organization.OrganizationDto;
 import org.sonar.server.es.EsTester;
-import org.sonar.server.es.ProjectIndexer;
 
 import static java.util.Collections.singletonList;
 import static org.assertj.core.api.Assertions.assertThat;
@@ -105,7 +104,7 @@ public class ProjectMeasuresIndexerTest {
   public void indexProject_indexes_provisioned_project() {
     ComponentDto project = componentDbTester.insertPrivateProject();
 
-    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.PROJECT_CREATION);
+    underTest.indexOnAnalysis(project.uuid());
 
     assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(project.uuid());
   }
@@ -114,7 +113,7 @@ public class ProjectMeasuresIndexerTest {
   public void indexProject_indexes_project_when_its_key_is_updated() {
     ComponentDto project = componentDbTester.insertPrivateProject();
 
-    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.PROJECT_KEY_UPDATE);
+    underTest.indexOnAnalysis(project.uuid());
 
     assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(project.uuid());
   }
@@ -126,7 +125,7 @@ public class ProjectMeasuresIndexerTest {
     componentDbTester.insertProjectAndSnapshot(project);
     componentDbTester.insertProjectAndSnapshot(ComponentTesting.newPrivateProjectDto(organizationDto));
 
-    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.NEW_ANALYSIS);
+    underTest.indexOnAnalysis(project.uuid());
 
     assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(project.uuid());
   }
@@ -143,7 +142,7 @@ public class ProjectMeasuresIndexerTest {
     ComponentDto project = newPrivateProjectDto(dbTester.getDefaultOrganization(), uuid).setKey("New key").setName("New name").setTagsString("new tag");
     SnapshotDto analysis = componentDbTester.insertProjectAndSnapshot(project);
 
-    underTest.indexOnAnalysis(project.uuid(), ProjectIndexer.Cause.NEW_ANALYSIS);
+    underTest.indexOnAnalysis(project.uuid());
 
     assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(uuid);
     SearchRequestBuilder request = esTester.client()
@@ -158,30 +157,30 @@ public class ProjectMeasuresIndexerTest {
     assertThat(request.get().getHits()).hasSize(1);
   }
 
-  @Test
-  public void delete_project() {
-    OrganizationDto organizationDto = dbTester.organizations().insert();
-    ComponentDto project1 = ComponentTesting.newPrivateProjectDto(organizationDto);
-    componentDbTester.insertProjectAndSnapshot(project1);
-    ComponentDto project2 = ComponentTesting.newPrivateProjectDto(organizationDto);
-    componentDbTester.insertProjectAndSnapshot(project2);
-    ComponentDto project3 = ComponentTesting.newPrivateProjectDto(organizationDto);
-    componentDbTester.insertProjectAndSnapshot(project3);
-    underTest.indexOnStartup(null);
+//  @Test
+//  public void delete_project() {
+//    OrganizationDto organizationDto = dbTester.organizations().insert();
+//    ComponentDto project1 = ComponentTesting.newPrivateProjectDto(organizationDto);
+//    componentDbTester.insertProjectAndSnapshot(project1);
+//    ComponentDto project2 = ComponentTesting.newPrivateProjectDto(organizationDto);
+//    componentDbTester.insertProjectAndSnapshot(project2);
+//    ComponentDto project3 = ComponentTesting.newPrivateProjectDto(organizationDto);
+//    componentDbTester.insertProjectAndSnapshot(project3);
+//    underTest.indexOnStartup(null);
+//
+//    underTest.deleteProject(project1.uuid());
+//
+//    assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(project2.uuid(), project3.uuid());
+//  }
 
-    underTest.deleteProject(project1.uuid());
-
-    assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(project2.uuid(), project3.uuid());
-  }
-
-  @Test
-  public void does_nothing_when_deleting_unknown_project() throws Exception {
-    ComponentDto project = ComponentTesting.newPrivateProjectDto(dbTester.organizations().insert());
-    componentDbTester.insertProjectAndSnapshot(project);
-    underTest.indexOnStartup(null);
-
-    underTest.deleteProject("UNKNOWN");
-
-    assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(project.uuid());
-  }
+//  @Test
+//  public void does_nothing_when_deleting_unknown_project() throws Exception {
+//    ComponentDto project = ComponentTesting.newPrivateProjectDto(dbTester.organizations().insert());
+//    componentDbTester.insertProjectAndSnapshot(project);
+//    underTest.indexOnStartup(null);
+//
+//    underTest.deleteProject("UNKNOWN");
+//
+//    assertThat(esTester.getIds(INDEX_TYPE_PROJECT_MEASURES)).containsOnly(project.uuid());
+//  }
 }

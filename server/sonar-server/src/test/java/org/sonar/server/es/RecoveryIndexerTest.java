@@ -43,9 +43,6 @@ import org.sonar.db.DbTester;
 import org.sonar.db.es.EsQueueDto;
 import org.sonar.db.rule.RuleDto;
 import org.sonar.db.user.UserDto;
-import org.sonar.server.issue.index.IssueIndexer;
-import org.sonar.server.permission.index.PermissionIndexer;
-import org.sonar.server.qualityprofile.index.ActiveRuleIndexer;
 import org.sonar.server.rule.index.RuleIndexDefinition;
 import org.sonar.server.rule.index.RuleIndexer;
 import org.sonar.server.user.index.UserIndexDefinition;
@@ -61,6 +58,7 @@ import static org.sonar.api.utils.log.LoggerLevel.ERROR;
 import static org.sonar.api.utils.log.LoggerLevel.INFO;
 import static org.sonar.api.utils.log.LoggerLevel.TRACE;
 import static org.sonar.core.util.stream.MoreCollectors.toArrayList;
+import static org.sonar.server.user.index.UserIndexDefinition.INDEX_TYPE_USER;
 
 public class RecoveryIndexerTest {
 
@@ -79,9 +77,6 @@ public class RecoveryIndexerTest {
 
   private UserIndexer mockedUserIndexer = mock(UserIndexer.class);
   private RuleIndexer mockedRuleIndexer = mock(RuleIndexer.class);
-  private ActiveRuleIndexer mockedActiveRuleIndexer = mock(ActiveRuleIndexer.class);
-  private PermissionIndexer mockedPermissionIndexer = mock(PermissionIndexer.class);
-  private IssueIndexer mockedIssueIndexer = mock(IssueIndexer.class);
   private RecoveryIndexer underTest;
 
   @After
@@ -109,7 +104,7 @@ public class RecoveryIndexerTest {
     MapSettings settings = new MapSettings()
       .setProperty("sonar.search.recovery.initialDelayInMs", "0")
       .setProperty("sonar.search.recovery.delayInMs", "1");
-    underTest = spy(new RecoveryIndexer(system2, settings.asConfig(), db.getDbClient(), mockedUserIndexer, mockedRuleIndexer, mockedActiveRuleIndexer, mockedPermissionIndexer, mockedIssueIndexer));
+    underTest = spy(new RecoveryIndexer(system2, settings.asConfig(), db.getDbClient(), mockedUserIndexer, mockedRuleIndexer));
     AtomicInteger calls = new AtomicInteger(0);
     doAnswer(invocation -> {
       calls.incrementAndGet();
@@ -295,9 +290,9 @@ public class RecoveryIndexerTest {
   @Test
   public void recover_multiple_times_the_same_document() {
     UserDto user = db.users().insertUser();
-    EsQueueDto item1 = EsQueueDto.create(EsQueueDto.Type.USER, user.getLogin());
-    EsQueueDto item2 = EsQueueDto.create(EsQueueDto.Type.USER, user.getLogin());
-    EsQueueDto item3 = EsQueueDto.create(EsQueueDto.Type.USER, user.getLogin());
+    EsQueueDto item1 = EsQueueDto.create(INDEX_TYPE_USER.format(), user.getLogin());
+    EsQueueDto item2 = EsQueueDto.create(INDEX_TYPE_USER.format(), user.getLogin());
+    EsQueueDto item3 = EsQueueDto.create(INDEX_TYPE_USER.format(), user.getLogin());
     db.getDbClient().esQueueDao().insert(db.getSession(), asList(item1, item2, item3));
     db.commit();
 
@@ -462,12 +457,12 @@ public class RecoveryIndexerTest {
   }
 
   private RecoveryIndexer newRecoveryIndexer(UserIndexer userIndexer, RuleIndexer ruleIndexer, Configuration config) {
-    return new RecoveryIndexer(system2, config, db.getDbClient(), userIndexer, ruleIndexer, mockedActiveRuleIndexer, mockedPermissionIndexer, mockedIssueIndexer);
+    return new RecoveryIndexer(system2, config, db.getDbClient(), userIndexer, ruleIndexer);
   }
 
   private EsQueueDto createUnindexedUser() {
     UserDto user = db.users().insertUser();
-    EsQueueDto item = EsQueueDto.create(EsQueueDto.Type.USER, user.getLogin());
+    EsQueueDto item = EsQueueDto.create(INDEX_TYPE_USER.format(), user.getLogin());
     db.getDbClient().esQueueDao().insert(db.getSession(), item);
     db.commit();
 
@@ -476,7 +471,7 @@ public class RecoveryIndexerTest {
 
   private EsQueueDto createUnindexedRule() {
     RuleDto rule = db.rules().insertRule();
-    EsQueueDto item = EsQueueDto.create(EsQueueDto.Type.RULE, rule.getKey().toString());
+    EsQueueDto item = EsQueueDto.create(RuleIndexDefinition.INDEX_TYPE_ACTIVE_RULE.format(), rule.getKey().toString());
     db.getDbClient().esQueueDao().insert(db.getSession(), item);
     db.commit();
 
