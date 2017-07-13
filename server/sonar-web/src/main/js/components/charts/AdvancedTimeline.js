@@ -20,14 +20,14 @@
 // @flow
 import React from 'react';
 import classNames from 'classnames';
-import { throttle, flatten, sortBy } from 'lodash';
+import { flatten, isEqual, sortBy, throttle } from 'lodash';
 import { bisector, extent, max } from 'd3-array';
 import { scaleLinear, scalePoint, scaleTime } from 'd3-scale';
 import { line as d3Line, area, curveBasis } from 'd3-shape';
 
 type Event = { className?: string, name: string, date: Date };
 export type Point = { x: Date, y: number | string };
-export type Serie = { name: string, data: Array<Point>, style: string };
+export type Serie = { name: string, data: Array<Point>, type: string };
 type Scale = Function;
 
 type Props = {
@@ -86,6 +86,7 @@ export default class AdvancedTimeline extends React.PureComponent {
 
   componentWillReceiveProps(nextProps: Props) {
     let scales;
+    let selectedDatePos;
     if (
       nextProps.metricType !== this.props.metricType ||
       nextProps.startDate !== this.props.startDate ||
@@ -96,13 +97,20 @@ export default class AdvancedTimeline extends React.PureComponent {
       nextProps.series !== this.props.series
     ) {
       scales = this.getScales(nextProps);
+      if (this.state.selectedDate != null) {
+        selectedDatePos = this.getSelectedDatePos(scales.xScale, this.state.selectedDate);
+      }
     }
 
-    if (scales || nextProps.selectedDate !== this.props.selectedDate) {
+    if (!isEqual(nextProps.selectedDate, this.props.selectedDate)) {
       const xScale = scales ? scales.xScale : this.state.xScale;
-      const selectedDatePos = this.getSelectedDatePos(xScale, nextProps.selectedDate);
-      this.setState({ ...scales, ...selectedDatePos });
-      if (nextProps.updateTooltip) {
+      selectedDatePos = this.getSelectedDatePos(xScale, nextProps.selectedDate);
+    }
+
+    if (scales || selectedDatePos) {
+      this.setState({ ...(scales || {}), ...(selectedDatePos || {}) });
+
+      if (selectedDatePos && nextProps.updateTooltip) {
         nextProps.updateTooltip(
           selectedDatePos.selectedDate,
           selectedDatePos.selectedDateXPos,
@@ -342,10 +350,10 @@ export default class AdvancedTimeline extends React.PureComponent {
     }
     return (
       <g>
-        {this.props.series.map(serie => (
+        {this.props.series.map((serie, idx) => (
           <path
             key={serie.name}
-            className={classNames('line-chart-path', 'line-chart-path-' + serie.style)}
+            className={classNames('line-chart-path', 'line-chart-path-' + idx)}
             d={lineGenerator(serie.data)}
           />
         ))}
@@ -364,10 +372,10 @@ export default class AdvancedTimeline extends React.PureComponent {
     }
     return (
       <g>
-        {this.props.series.map(serie => (
+        {this.props.series.map((serie, idx) => (
           <path
             key={serie.name}
-            className={classNames('line-chart-area', 'line-chart-area-' + serie.style)}
+            className={classNames('line-chart-area', 'line-chart-area-' + idx)}
             d={areaGenerator(serie.data)}
           />
         ))}
@@ -415,7 +423,7 @@ export default class AdvancedTimeline extends React.PureComponent {
           y1={yScale.range()[0]}
           y2={yScale.range()[1]}
         />
-        {this.props.series.map(serie => {
+        {this.props.series.map((serie, idx) => {
           const point = serie.data[selectedDateIdx];
           if (!point || (!point.y && point.y !== 0)) {
             return null;
@@ -426,7 +434,7 @@ export default class AdvancedTimeline extends React.PureComponent {
               cx={selectedDateXPos}
               cy={yScale(point.y)}
               r="4"
-              className={classNames('line-chart-dot', 'line-chart-dot-' + serie.style)}
+              className={classNames('line-chart-dot', 'line-chart-dot-' + idx)}
             />
           );
         })}
@@ -438,7 +446,11 @@ export default class AdvancedTimeline extends React.PureComponent {
     return (
       <defs>
         <clipPath id="chart-clip">
-          <rect width={this.state.xScale.range()[1]} height={this.state.yScale.range()[0] + 10} />
+          <rect
+            width={this.state.xScale.range()[1]}
+            height={this.state.yScale.range()[0] + 10}
+            transform="translate(0,-5)"
+          />
         </clipPath>
       </defs>
     );

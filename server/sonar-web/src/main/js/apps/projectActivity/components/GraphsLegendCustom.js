@@ -17,23 +17,25 @@
  * along with this program; if not, write to the Free Software Foundation,
  * Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
  */
+// @flow
 import React from 'react';
 import GraphsLegendItem from './GraphsLegendItem';
 import Tooltip from '../../../components/controls/Tooltip';
 import { hasDataValues } from '../utils';
 import { translate } from '../../../helpers/l10n';
 import type { Metric } from '../types';
+import type { Serie } from '../../../components/charts/AdvancedTimeline';
 
 type Props = {
   metrics: Array<Metric>,
   removeMetric: string => void,
-  series: Array<{ name: string, translatedName: string, style: string }>
+  series: Array<Serie & { translatedName: string }>
 };
 
 export default function GraphsLegendCustom({ metrics, removeMetric, series }: Props) {
   return (
     <div className="project-activity-graph-legends">
-      {series.map(serie => {
+      {series.map((serie, idx) => {
         const metric = metrics.find(metric => metric.key === serie.name);
         const hasData = hasDataValues(serie);
         const legendItem = (
@@ -41,7 +43,7 @@ export default function GraphsLegendCustom({ metrics, removeMetric, series }: Pr
             metric={serie.name}
             name={metric && metric.custom ? metric.name : serie.translatedName}
             showWarning={!hasData}
-            style={serie.style}
+            style={idx.toString()}
             removeMetric={removeMetric}
           />
         );

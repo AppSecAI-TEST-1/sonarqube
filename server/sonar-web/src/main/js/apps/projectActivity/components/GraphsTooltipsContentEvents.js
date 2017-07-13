@@ -31,21 +31,16 @@ export default function GraphsTooltipsContentEvents({ events }: Props) {
   return (
     <tbody>
       <tr><td className="project-activity-graph-tooltip-separator" colSpan="3"><hr /></td></tr>
-      {events.map(event => (
-        <tr key={event.key} className="project-activity-graph-tooltip-line">
-          <td className="text-top spacer-right thin">
-            <ProjectEventIcon
-              className={'project-activity-event-icon margin-align ' + event.category}
-            />
-          </td>
-          <td colSpan="2">
-            <span className="little-spacer-right">
-              {translate('event.category', event.category)}:
+      <tr className="project-activity-graph-tooltip-line">
+        <td colSpan="3">
+          <span>{translate('events')}:</span>
+          {events.map(event => (
+            <span key={event.key} className="spacer-left">
+              <ProjectEventIcon className={'project-activity-event-icon ' + event.category} />
             </span>
-            {event.name}
-          </td>
-        </tr>
-      ))}
+          ))}
+        </td>
+      </tr>
     </tbody>
   );
 }

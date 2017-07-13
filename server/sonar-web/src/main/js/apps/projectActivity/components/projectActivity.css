@@ -76,12 +76,14 @@
 
 .project-activity-graph-tooltip {
   padding: 8px;
-  pointer-events: none;
 }
 
 .project-activity-graph-tooltip-line {
   height: 20px;
-  padding-bottom: 4px;
+}
+
+.project-activity-graph-tooltip-line + .project-activity-graph-tooltip-line {
+  padding-top: 4px;
 }
 
 .project-activity-graph-tooltip-overview-line {

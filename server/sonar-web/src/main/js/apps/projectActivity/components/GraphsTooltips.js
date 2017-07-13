@@ -49,7 +49,7 @@ export default class GraphsTooltips extends React.PureComponent {
 
   render() {
     const { events, measuresHistory, tooltipIdx } = this.props;
-    const top = 50;
+    const top = 30;
     let left = this.props.tooltipPos + 60;
     let customClass;
     if (left > this.props.graphWidth - TOOLTIP_WIDTH - 50) {
@@ -64,7 +64,7 @@ export default class GraphsTooltips extends React.PureComponent {
           </div>
           <table className="width-100">
             <tbody>
-              {this.props.series.map(serie => {
+              {this.props.series.map((serie, idx) => {
                 const point = serie.data[tooltipIdx];
                 if (!point || (!point.y && point.y !== 0)) {
                   return null;
@@ -74,8 +74,10 @@ export default class GraphsTooltips extends React.PureComponent {
                     <GraphsTooltipsContentOverview
                       key={serie.name}
                       measuresHistory={measuresHistory}
-                      serie={serie}
+                      name={serie.name}
+                      style={idx.toString()}
                       tooltipIdx={tooltipIdx}
+                      translatedName={serie.translatedName}
                       value={this.props.formatValue(point.y)}
                     />
                   );
@@ -84,7 +86,8 @@ export default class GraphsTooltips extends React.PureComponent {
                   return (
                     <GraphsTooltipsContent
                       key={serie.name}
-                      serie={serie}
+                      name={serie.name}
+                      style={idx.toString()}
                       translatedName={metric && metric.custom ? metric.name : serie.translatedName}
                       value={this.props.formatValue(point.y)}
                     />
