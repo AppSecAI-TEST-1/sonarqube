@@ -20,9 +20,10 @@
 
 package org.sonar.server.es;
 
-import java.util.ArrayList;
 import java.util.Collection;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import org.sonar.db.DbSession;
 import org.sonar.db.es.EsQueueDto;
 
@@ -38,9 +39,9 @@ public class ProjectIndexersImpl implements ProjectIndexers {
 
   @Override
   public void commitAndIndex(DbSession dbSession, Collection<String> projectUuids, ProjectIndexer.Cause cause) {
-    List<EsQueueDto> items = new ArrayList<>();
-    indexers.forEach(i -> items.addAll(i.prepareForRecovery(dbSession, projectUuids, cause)));
+    Map<ProjectIndexer, Collection<EsQueueDto>> itemsByIndexer = new IdentityHashMap<>();
+    indexers.forEach(i -> itemsByIndexer.put(i, i.prepareForRecovery(dbSession, projectUuids, cause)));
     dbSession.commit();
-    indexers.forEach(i -> i.index(dbSession, items));
+    itemsByIndexer.forEach((indexer, items) -> indexer.index(dbSession, items));
   }
 }
